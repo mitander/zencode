@@ -14,7 +14,7 @@ __USE AT OWN DISCRETION!__
 This project is work in progress, expect no test coverage and frequently changing API
 
 ## Usage
-```
+```zig
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const ally = gpa.allocator();
