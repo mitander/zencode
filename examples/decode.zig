@@ -1,20 +1,3 @@
-# Zencode
-![loc](https://sloc.xyz/github/mitander/zencode)
-
-[Bencode](https://en.wikipedia.org/wiki/Bencode) encoder/decoder library written in Zig
-
-Visit [BEP-0003](https://www.bittorrent.org/beps/bep_0003.html#bencoding) for more information about Bencode format
-
-## Zig version
-__v0.11__
-
-## Note
-__USE AT OWN DISCRETION!__
-
-This project is work in progress, expect no test coverage and frequently changing API
-
-## Usage
-```zig
 const std = @import("std");
 const ValueTree = @import("zencode").ValueTree;
 
@@ -39,10 +22,3 @@ pub fn main() !void {
     std.debug.assert(creation_date == 1690028921);
     std.debug.print("creation_date: {d}\n", .{creation_date});
 }
-```
-
-### Examples
-`zig build example_decode` or `zig build && ./zig-out/bin/example_decode`
-
-## License
-[MIT](/LICENSE)

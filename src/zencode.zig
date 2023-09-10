@@ -231,9 +231,6 @@ pub fn main() !void {
     defer tree.deinit();
 
     std.log.debug("{s}", .{tree.root.get_string("announce").?});
-    std.log.debug("{s}", .{tree.root.get_string("comment").?});
-    std.log.debug("{s}", .{tree.root.get_string("created by").?});
-    std.log.debug("{d}", .{tree.root.get_i64("creation date").?});
 
     try tree.root.encode(std.io.getStdOut().writer());
 }
