@@ -3,6 +3,12 @@ const std = @import("std");
 const Map = std.StringArrayHashMapUnmanaged(Value);
 const ArrayList = std.ArrayList(Value);
 
+const ParseError = error{
+    MissingTerminator,
+    InvalidDelimiter,
+    InvalidInteger,
+};
+
 pub const ValueTree = struct {
     arena: std.heap.ArenaAllocator,
     root: Value,
@@ -163,8 +169,13 @@ fn BencodeReader(comptime T: type) type {
         }
 
         fn parse_integer(self: *Self, ally: std.mem.Allocator) !i64 {
-            const b = try self.reader().readUntilDelimiterAlloc(ally, 'e', 25);
-            return try std.fmt.parseInt(i64, b, 10);
+            const b = self.reader().readUntilDelimiterAlloc(ally, 'e', 25) catch {
+                return ParseError.MissingTerminator;
+            };
+            const int = std.fmt.parseInt(i64, b, 10) catch {
+                return ParseError.InvalidInteger;
+            };
+            return int;
         }
 
         fn parse_list(self: *Self, ally: std.mem.Allocator) ![]Value {
@@ -213,10 +224,39 @@ fn BencodeReader(comptime T: type) type {
                 'd' => return .{
                     .Dictionary = try self.parse_dict(ally),
                 },
-                else => return error.BencodeBadDelimiter,
+                else => return ParseError.InvalidDelimiter,
             }
         }
     };
+}
+
+const testing = std.testing;
+const expect_eq = testing.expectEqual;
+const expect_err = testing.expectError;
+
+test "parse integer" {
+    const t = try ValueTree.parse("i20e", testing.allocator);
+    defer t.deinit();
+    try expect_eq(t.root.Integer, 20);
+}
+test "parse unsigned integer" {
+    const t = try ValueTree.parse("i-50e", testing.allocator);
+    defer t.deinit();
+    try expect_eq(t.root.Integer, -50);
+}
+
+test "parse invalid integer" {
+    try expect_err(ParseError.InvalidInteger, ValueTree.parse("iBBe", testing.allocator));
+}
+
+test "parse integer invalid/missing delimiter" {
+    // TODO: we should also test for missing delimiter, but need work.
+    try expect_err(ParseError.InvalidDelimiter, ValueTree.parse("x20e", testing.allocator));
+}
+
+test "parse integer invalid/missing terminator" {
+    // TODO: we should also test for invalid terminator, but need work.
+    try expect_err(ParseError.MissingTerminator, ValueTree.parse("i20", testing.allocator));
 }
 
 pub fn main() !void {
