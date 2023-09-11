@@ -258,19 +258,3 @@ test "parse integer invalid/missing terminator" {
     // TODO: we should also test for invalid terminator, but need work.
     try expect_err(ParseError.MissingTerminator, ValueTree.parse("i20", testing.allocator));
 }
-
-pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    const ally = gpa.allocator();
-    defer _ = gpa.deinit();
-
-    var file = try std.fs.cwd().openFile("./assets/example.torrent", .{});
-    defer file.close();
-
-    const tree = try ValueTree.parse_reader(file.reader(), ally);
-    defer tree.deinit();
-
-    std.log.debug("{s}", .{tree.root.get_string("announce").?});
-
-    try tree.root.encode(std.io.getStdOut().writer());
-}
