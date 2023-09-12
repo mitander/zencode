@@ -5,8 +5,10 @@ const ArrayList = std.ArrayList(Value);
 
 const ParseError = error{
     MissingTerminator,
+    MissingSeparator,
     InvalidDelimiter,
     InvalidInteger,
+    InvalidString,
 };
 
 pub const ValueTree = struct {
@@ -161,10 +163,13 @@ fn BencodeReader(comptime T: type) type {
         }
 
         fn parse_bytes(self: *Self, ally: std.mem.Allocator) ![]const u8 {
-            const b = try self.reader().readUntilDelimiterAlloc(ally, ':', 25);
+            const b = self.reader().readUntilDelimiterAlloc(ally, ':', 25) catch {
+                return ParseError.MissingSeparator;
+            };
             const len = try std.fmt.parseInt(usize, b, 10);
             var buf = try ally.alloc(u8, len);
-            _ = try self.reader().readAll(buf);
+            var l = try self.reader().readAll(buf);
+            if (l == 0) return ParseError.InvalidString;
             return buf;
         }
 
@@ -232,6 +237,7 @@ fn BencodeReader(comptime T: type) type {
 
 const testing = std.testing;
 const expect_eq = testing.expectEqual;
+const expect_eq_string = testing.expectEqualStrings;
 const expect_err = testing.expectError;
 
 test "parse integer" {
@@ -257,4 +263,25 @@ test "parse integer invalid/missing delimiter" {
 test "parse integer invalid/missing terminator" {
     // TODO: we should also test for invalid terminator, but need work.
     try expect_err(ParseError.MissingTerminator, ValueTree.parse("i20", testing.allocator));
+}
+
+test "parse string" {
+    const t = try ValueTree.parse("4:test", testing.allocator);
+    defer t.deinit();
+    try expect_eq_string("test", t.root.String);
+}
+
+test "parse string length mismatch" {
+    // TODO: I would like this to fail if the length and actual string doesn't match, but need work.
+    const t = try ValueTree.parse("5:helloworld", testing.allocator);
+    defer t.deinit();
+    try expect_eq_string("hello", t.root.String);
+}
+
+test "parse invalid string" {
+    try expect_err(ParseError.InvalidString, ValueTree.parse("5:", testing.allocator));
+}
+
+test "parse string missing separator" {
+    try expect_err(ParseError.MissingSeparator, ValueTree.parse("4test", testing.allocator));
 }
