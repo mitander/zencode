@@ -207,7 +207,7 @@ fn BencodeReader(comptime T: type) type {
                 const v = try self.parse_inner(ally);
                 try map.put(ally, k, v);
             }
-            return error.EndOfStream;
+            return ParseError.MissingTerminator;
         }
 
         fn parse_inner(self: *Self, ally: std.mem.Allocator) anyerror!Value {
@@ -306,4 +306,20 @@ test "parse empty list" {
 
 test "parse list missing terminator" {
     try expect_err(ParseError.MissingTerminator, ValueTree.parse("li13e", testing.allocator));
+}
+
+test "parse dict" {
+    const t = try ValueTree.parse("d3:foo3:bar4:spamli42eee", testing.allocator);
+    defer t.deinit();
+    try expect_eq_string(t.root.get_string("foo").?, "bar");
+    const list = t.root.get_list("spam").?;
+    try expect_eq(list[0].Integer, 42);
+}
+
+test "parse dict missing terminator" {
+    try expect_err(ParseError.MissingTerminator, ValueTree.parse("d3:foo3:bar4:spamli42ee", testing.allocator));
+}
+
+test "parse invalid dict" {
+    try expect_err(ParseError.MissingSeparator, ValueTree.parse("d123e", testing.allocator));
 }
