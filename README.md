@@ -41,8 +41,9 @@ pub fn main() !void {
 }
 ```
 
-### Examples
-`zig build example_decode` or `zig build && ./zig-out/bin/example_decode`
+### Run examples
+Decode: `zig build example_decode` or `zig build && ./zig-out/bin/example_decode`\
+Encode: `zig build example_encode` or `zig build && ./zig-out/bin/example_encode`
 
 ## License
 [MIT](/LICENSE)

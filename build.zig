@@ -35,7 +35,20 @@ pub fn build(b: *std.Build) void {
     example_decode.addModule("zencode", module);
     b.installArtifact(example_decode);
 
-    const run_cmd = b.addRunArtifact(example_decode);
-    const run_step = b.step("example_decode", "Run decode example");
-    run_step.dependOn(&run_cmd.step);
+    const run_decode_cmd = b.addRunArtifact(example_decode);
+    const run_decode_step = b.step("example_decode", "Run decode example");
+    run_decode_step.dependOn(&run_decode_cmd.step);
+
+    // encode example
+    const example_encode = b.addExecutable(.{
+        .name = "example_encode",
+        .root_source_file = .{ .path = "examples/encode.zig" },
+        .optimize = optimize,
+    });
+    example_encode.addModule("zencode", module);
+    b.installArtifact(example_encode);
+
+    const run_encode_cmd = b.addRunArtifact(example_encode);
+    const run_encode_step = b.step("example_encode", "Run encode example");
+    run_encode_step.dependOn(&run_encode_cmd.step);
 }
