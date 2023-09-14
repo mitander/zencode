@@ -1,5 +1,5 @@
 const std = @import("std");
-const ValueTree = @import("zencode").ValueTree;
+const zencode = @import("zencode");
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -10,7 +10,7 @@ pub fn main() !void {
     const expect = "l4:spami42eli9ei50eed3:foo3:baree";
 
     // parse bencode to ValueTree
-    const t = try ValueTree.parse(expect, ally);
+    const t = try zencode.parse(expect, ally);
     defer t.deinit();
 
     var buf = try ally.alloc(u8, expect.len);

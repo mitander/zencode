@@ -1,5 +1,5 @@
 const std = @import("std");
-const ValueTree = @import("zencode").ValueTree;
+const zencode = @import("zencode");
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -10,7 +10,7 @@ pub fn main() !void {
     defer file.close();
 
     // parse bencode to value tree
-    const v = try ValueTree.parseReader(file.reader(), ally);
+    const v = try zencode.parseReader(file.reader(), ally);
     defer v.deinit();
 
     // access values by using get functions (getDict/getList/getString/getI64/getU64)

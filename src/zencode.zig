@@ -11,29 +11,30 @@ const ParseError = error{
     InvalidString,
 };
 
+pub fn parse(b: []const u8, ally: std.mem.Allocator) !ValueTree {
+    var buf = std.io.fixedBufferStream(b);
+    return try parseReader(buf.reader(), ally);
+}
+
+pub fn parseReader(reader: anytype, ally: std.mem.Allocator) !ValueTree {
+    var r: BencodeReader(@TypeOf(reader)) = .{ .child_reader = reader };
+    var arena = std.heap.ArenaAllocator.init(ally);
+    errdefer arena.deinit();
+    var values = try r.parseInner(arena.allocator());
+    return ValueTree{ .arena = arena, .root = values };
+}
+
 pub const ValueTree = struct {
     arena: std.heap.ArenaAllocator,
     root: Value,
 
     const Self = @This();
 
-    pub fn parse(b: []const u8, ally: std.mem.Allocator) !ValueTree {
-        var buf = std.io.fixedBufferStream(b);
-        return try parseReader(buf.reader(), ally);
-    }
-
-    pub fn parseReader(reader: anytype, ally: std.mem.Allocator) !ValueTree {
-        var r: BencodeReader(@TypeOf(reader)) = .{ .child_reader = reader };
-        var arena = std.heap.ArenaAllocator.init(ally);
-        errdefer arena.deinit();
-        var values = try r.parseInner(arena.allocator());
-        return ValueTree{ .arena = arena, .root = values };
-    }
-
     pub fn deinit(self: *const ValueTree) void {
         self.arena.deinit();
     }
 
+    // TODO: remove as ValueTree method, take info as input and add tests
     pub fn hashInfo(self: Self, ally: std.mem.Allocator) ![20]u8 {
         var list = std.ArrayList(u8).init(ally);
         defer list.deinit();
@@ -253,53 +254,53 @@ const expectEqualStrings = testing.expectEqualStrings;
 const expectError = testing.expectError;
 
 test "parse integer" {
-    const tree = try ValueTree.parse("i20e", testing.allocator);
+    const tree = try parse("i20e", testing.allocator);
     defer tree.deinit();
     try expectEqual(@as(i64, 20), tree.root.Integer);
 }
 test "parse negative integer" {
-    const tree = try ValueTree.parse("i-50e", testing.allocator);
+    const tree = try parse("i-50e", testing.allocator);
     defer tree.deinit();
     try expectEqual(@as(i64, -50), tree.root.Integer);
 }
 
 test "parse invalid integer" {
-    try expectError(ParseError.InvalidInteger, ValueTree.parse("iBBe", testing.allocator));
+    try expectError(ParseError.InvalidInteger, parse("iBBe", testing.allocator));
 }
 
 test "parse integer invalid/missing delimiter" {
     // TODO: we should also test for missing delimiter, but need work.
-    try expectError(ParseError.InvalidDelimiter, ValueTree.parse("x20e", testing.allocator));
+    try expectError(ParseError.InvalidDelimiter, parse("x20e", testing.allocator));
 }
 
 test "parse integer invalid/missing terminator" {
     // TODO: we should also test for invalid terminator, but need work.
-    try expectError(ParseError.MissingTerminator, ValueTree.parse("i20", testing.allocator));
+    try expectError(ParseError.MissingTerminator, parse("i20", testing.allocator));
 }
 
 test "parse string" {
-    const tree = try ValueTree.parse("4:test", testing.allocator);
+    const tree = try parse("4:test", testing.allocator);
     defer tree.deinit();
     try expectEqualStrings("test", tree.root.String);
 }
 
 test "parse string length mismatch" {
     // TODO: I would like this to fail if the length and actual string doesn't match, but need work.
-    const tree = try ValueTree.parse("5:helloworld", testing.allocator);
+    const tree = try parse("5:helloworld", testing.allocator);
     defer tree.deinit();
     try expectEqualStrings("hello", tree.root.String);
 }
 
 test "parse invalid string" {
-    try expectError(ParseError.InvalidString, ValueTree.parse("5:", testing.allocator));
+    try expectError(ParseError.InvalidString, parse("5:", testing.allocator));
 }
 
 test "parse string missing separator" {
-    try expectError(ParseError.MissingSeparator, ValueTree.parse("4test", testing.allocator));
+    try expectError(ParseError.MissingSeparator, parse("4test", testing.allocator));
 }
 
 test "parse list" {
-    const tree = try ValueTree.parse("l4:spami42eli9ei50eed3:foo3:baree", testing.allocator);
+    const tree = try parse("l4:spami42eli9ei50eed3:foo3:baree", testing.allocator);
     defer tree.deinit();
     const list = tree.root.List;
     try expectEqualStrings("spam", list[0].String);
@@ -310,17 +311,17 @@ test "parse list" {
 }
 
 test "parse empty list" {
-    const tree = try ValueTree.parse("le", testing.allocator);
+    const tree = try parse("le", testing.allocator);
     defer tree.deinit();
     try expectEqual(@as(usize, 0), tree.root.List.len);
 }
 
 test "parse list missing terminator" {
-    try expectError(ParseError.MissingTerminator, ValueTree.parse("li13e", testing.allocator));
+    try expectError(ParseError.MissingTerminator, parse("li13e", testing.allocator));
 }
 
 test "parse dict" {
-    const tree = try ValueTree.parse("d3:foo3:bar4:spamli42eee", testing.allocator);
+    const tree = try parse("d3:foo3:bar4:spamli42eee", testing.allocator);
     defer tree.deinit();
     try expectEqualStrings("bar", tree.root.getString("foo").?);
     const list = tree.root.getList("spam").?;
@@ -328,9 +329,9 @@ test "parse dict" {
 }
 
 test "parse dict missing terminator" {
-    try expectError(ParseError.MissingTerminator, ValueTree.parse("d3:foo3:bar4:spamli42ee", testing.allocator));
+    try expectError(ParseError.MissingTerminator, parse("d3:foo3:bar4:spamli42ee", testing.allocator));
 }
 
 test "parse invalid dict" {
-    try expectError(ParseError.MissingSeparator, ValueTree.parse("d123e", testing.allocator));
+    try expectError(ParseError.MissingSeparator, parse("d123e", testing.allocator));
 }
