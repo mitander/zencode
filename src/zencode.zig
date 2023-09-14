@@ -15,6 +15,8 @@ pub const ValueTree = struct {
     arena: std.heap.ArenaAllocator,
     root: Value,
 
+    const Self = @This();
+
     pub fn parse(b: []const u8, ally: std.mem.Allocator) !ValueTree {
         var buf = std.io.fixedBufferStream(b);
         return try parseReader(buf.reader(), ally);
@@ -30,6 +32,16 @@ pub const ValueTree = struct {
 
     pub fn deinit(self: *const ValueTree) void {
         self.arena.deinit();
+    }
+
+    pub fn hashInfo(self: Self, ally: std.mem.Allocator) ![20]u8 {
+        var list = std.ArrayList(u8).init(ally);
+        defer list.deinit();
+        const info = Value{ .Dictionary = self.root.getDict("info").? };
+        try info.encode(list.writer());
+        var hash: [20]u8 = undefined;
+        std.crypto.hash.Sha1.hash(list.items, hash[0..], std.crypto.hash.Sha1.Options{});
+        return hash;
     }
 };
 
@@ -102,7 +114,7 @@ pub const Value = union(enum) {
         }
     }
 
-    pub fn getDict(self: Self, key: []const u8) ?Value {
+    pub fn getDict(self: Self, key: []const u8) ?Map {
         return self.lookup(key, .Dictionary);
     }
 
