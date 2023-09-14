@@ -241,14 +241,14 @@ const expectEqualStrings = testing.expectEqualStrings;
 const expectError = testing.expectError;
 
 test "parse integer" {
-    const t = try ValueTree.parse("i20e", testing.allocator);
-    defer t.deinit();
-    try expectEqual(t.root.Integer, 20);
+    const tree = try ValueTree.parse("i20e", testing.allocator);
+    defer tree.deinit();
+    try expectEqual(@as(i64, 20), tree.root.Integer);
 }
-test "parse unsigned integer" {
-    const t = try ValueTree.parse("i-50e", testing.allocator);
-    defer t.deinit();
-    try expectEqual(t.root.Integer, -50);
+test "parse negative integer" {
+    const tree = try ValueTree.parse("i-50e", testing.allocator);
+    defer tree.deinit();
+    try expectEqual(@as(i64, -50), tree.root.Integer);
 }
 
 test "parse invalid integer" {
@@ -266,16 +266,16 @@ test "parse integer invalid/missing terminator" {
 }
 
 test "parse string" {
-    const t = try ValueTree.parse("4:test", testing.allocator);
-    defer t.deinit();
-    try expectEqualStrings("test", t.root.String);
+    const tree = try ValueTree.parse("4:test", testing.allocator);
+    defer tree.deinit();
+    try expectEqualStrings("test", tree.root.String);
 }
 
 test "parse string length mismatch" {
     // TODO: I would like this to fail if the length and actual string doesn't match, but need work.
-    const t = try ValueTree.parse("5:helloworld", testing.allocator);
-    defer t.deinit();
-    try expectEqualStrings("hello", t.root.String);
+    const tree = try ValueTree.parse("5:helloworld", testing.allocator);
+    defer tree.deinit();
+    try expectEqualStrings("hello", tree.root.String);
 }
 
 test "parse invalid string" {
@@ -287,21 +287,20 @@ test "parse string missing separator" {
 }
 
 test "parse list" {
-    const t = try ValueTree.parse("l4:spami42eli9ei50eed3:foo3:baree", testing.allocator);
-    defer t.deinit();
-    const list = t.root.List;
+    const tree = try ValueTree.parse("l4:spami42eli9ei50eed3:foo3:baree", testing.allocator);
+    defer tree.deinit();
+    const list = tree.root.List;
     try expectEqualStrings("spam", list[0].String);
-    try expectEqual(list[1].Integer, 42);
-    try expectEqual(list[2].List[0].Integer, 9);
-    try expectEqual(list[2].List[1].Integer, 50);
-    try expectEqualStrings(list[3].getString("foo").?, "bar");
+    try expectEqual(@as(i64, 42), list[1].Integer);
+    try expectEqual(@as(i64, 9), list[2].List[0].Integer);
+    try expectEqual(@as(i64, 50), list[2].List[1].Integer);
+    try expectEqualStrings("bar", list[3].getString("foo").?);
 }
 
 test "parse empty list" {
-    const t = try ValueTree.parse("le", testing.allocator);
-    defer t.deinit();
-    const len = t.root.List.len;
-    try expectEqual(len, 0);
+    const tree = try ValueTree.parse("le", testing.allocator);
+    defer tree.deinit();
+    try expectEqual(@as(usize, 0), tree.root.List.len);
 }
 
 test "parse list missing terminator" {
@@ -309,11 +308,11 @@ test "parse list missing terminator" {
 }
 
 test "parse dict" {
-    const t = try ValueTree.parse("d3:foo3:bar4:spamli42eee", testing.allocator);
-    defer t.deinit();
-    try expectEqualStrings(t.root.getString("foo").?, "bar");
-    const list = t.root.getList("spam").?;
-    try expectEqual(list[0].Integer, 42);
+    const tree = try ValueTree.parse("d3:foo3:bar4:spamli42eee", testing.allocator);
+    defer tree.deinit();
+    try expectEqualStrings("bar", tree.root.getString("foo").?);
+    const list = tree.root.getList("spam").?;
+    try expectEqual(@as(i64, 42), list[0].Integer);
 }
 
 test "parse dict missing terminator" {
