@@ -9,6 +9,7 @@ const ParseError = error{
     InvalidDelimiter,
     InvalidInteger,
     InvalidString,
+    InvalidIntegerCast,
 };
 
 pub fn parse(b: []const u8, ally: std.mem.Allocator) !ValueTree {
@@ -131,8 +132,13 @@ pub const Value = union(enum) {
         return self.lookup(key, .Integer);
     }
 
-    pub fn getU64(self: Self, key: []const u8) ?u64 {
-        return @as(u64, self.getI64(key)) orelse return null;
+    pub fn getU64(self: Self, key: []const u8) !?u64 {
+        const int = self.getI64(key) orelse return null;
+        if (int < 0) {
+            return ParseError.InvalidIntegerCast;
+        }
+        const uint: u64 = @intCast(int);
+        return uint;
     }
 
     fn lookup(self: Self, key: []const u8, comptime tag: std.meta.FieldEnum(Value)) ?std.meta.FieldType(Value, tag) {
@@ -262,6 +268,12 @@ test "parse negative integer" {
     const tree = try parse("i-50e", testing.allocator);
     defer tree.deinit();
     try expectEqual(@as(i64, -50), tree.root.Integer);
+}
+
+test "parse negative integer to u64" {
+    const tree = try parse("d3:leni-50ee", testing.allocator);
+    defer tree.deinit();
+    try expectError(ParseError.InvalidIntegerCast, tree.root.getU64("len"));
 }
 
 test "parse invalid integer" {
