@@ -39,7 +39,7 @@ pub const ValueTree = struct {
     pub fn hashInfo(self: Self, ally: std.mem.Allocator) ![20]u8 {
         var list = std.ArrayList(u8).init(ally);
         defer list.deinit();
-        const info = Value{ .Dictionary = self.root.getDict("info").? };
+        const info = self.root.getDict("info").?;
         try info.encode(list.writer());
         var hash: [20]u8 = undefined;
         std.crypto.hash.Sha1.hash(list.items, hash[0..], std.crypto.hash.Sha1.Options{});
@@ -116,8 +116,9 @@ pub const Value = union(enum) {
         }
     }
 
-    pub fn getDict(self: Self, key: []const u8) ?Map {
-        return self.lookup(key, .Dictionary);
+    pub fn getDict(self: Self, key: []const u8) ?Value {
+        const val = self.lookup(key, .Dictionary) orelse return null;
+        return Value{ .Dictionary = val };
     }
 
     pub fn getList(self: Self, key: []const u8) ?[]const Value {
