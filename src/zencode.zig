@@ -34,17 +34,6 @@ pub const ValueTree = struct {
     pub fn deinit(self: *const ValueTree) void {
         self.arena.deinit();
     }
-
-    // TODO: remove as ValueTree method, take info as input and add tests
-    pub fn hashInfo(self: Self, ally: std.mem.Allocator) ![20]u8 {
-        var list = std.ArrayList(u8).init(ally);
-        defer list.deinit();
-        const info = self.root.getDict("info").?;
-        try info.encode(list.writer());
-        var hash: [20]u8 = undefined;
-        std.crypto.hash.Sha1.hash(list.items, hash[0..], std.crypto.hash.Sha1.Options{});
-        return hash;
-    }
 };
 
 pub const Value = union(enum) {
