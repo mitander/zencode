@@ -18,10 +18,10 @@ pub fn parse(b: []const u8, ally: std.mem.Allocator) !ValueTree {
 }
 
 pub fn parseReader(reader: anytype, ally: std.mem.Allocator) !ValueTree {
-    var r: BencodeReader(@TypeOf(reader)) = .{ .child_reader = reader };
     var arena = std.heap.ArenaAllocator.init(ally);
     errdefer arena.deinit();
-    var values = try r.parseInner(arena.allocator());
+    var r: BencodeReader(@TypeOf(reader)) = .{ .child_reader = reader, .ally = arena.allocator() };
+    var values = try r.parseInner();
     return ValueTree{ .arena = arena, .root = values };
 }
 
@@ -153,6 +153,7 @@ fn BencodeReader(comptime T: type) type {
     return struct {
         child_reader: T,
         buf: ?u8 = null,
+        ally: std.mem.Allocator,
 
         pub const Error = T.Error;
         pub const Reader = std.io.Reader(*Self, Error, read);
@@ -174,27 +175,29 @@ fn BencodeReader(comptime T: type) type {
 
         fn peek(self: *Self) !?u8 {
             if (self.buf == null) {
-                self.buf = self.child_reader.readByte() catch |err| switch (err) {
-                    error.EndOfStream => return null,
-                    else => |e| return e,
+                self.buf = self.child_reader.readByte() catch |err| {
+                    switch (err) {
+                        error.EndOfStream => return null,
+                        else => return err,
+                    }
                 };
             }
             return self.buf;
         }
 
-        fn parseBytes(self: *Self, ally: std.mem.Allocator) ![]const u8 {
-            const b = self.reader().readUntilDelimiterAlloc(ally, ':', 25) catch {
+        fn parseBytes(self: *Self) ![]const u8 {
+            const b = self.reader().readUntilDelimiterAlloc(self.ally, ':', 25) catch {
                 return ParseError.MissingSeparator;
             };
             const len = try std.fmt.parseInt(usize, b, 10);
-            var buf = try ally.alloc(u8, len);
+            var buf = try self.ally.alloc(u8, len);
             var l = try self.reader().readAll(buf);
             if (l == 0) return ParseError.InvalidString;
             return buf;
         }
 
-        fn parseInteger(self: *Self, ally: std.mem.Allocator) !i64 {
-            const b = self.reader().readUntilDelimiterAlloc(ally, 'e', 25) catch {
+        fn parseInteger(self: *Self) !i64 {
+            const b = self.reader().readUntilDelimiterAlloc(self.ally, 'e', 25) catch {
                 return ParseError.MissingTerminator;
             };
             const int = std.fmt.parseInt(i64, b, 10) catch {
@@ -203,51 +206,51 @@ fn BencodeReader(comptime T: type) type {
             return int;
         }
 
-        fn parseList(self: *Self, ally: std.mem.Allocator) ![]Value {
-            var arr = ArrayList.init(ally);
+        fn parseList(self: *Self) ![]Value {
+            var arr = ArrayList.init(self.ally);
             while (try self.peek()) |c| {
                 if (c == 'e') {
                     self.buf = null;
                     return arr.toOwnedSlice();
                 }
-                const v = try self.parseInner(ally);
+                const v = try self.parseInner();
                 try arr.append(v);
             }
             return ParseError.MissingTerminator;
         }
 
-        fn parseDict(self: *Self, ally: std.mem.Allocator) !Map {
+        fn parseDict(self: *Self) !Map {
             var map = Map{};
             while (try self.peek()) |char| {
                 if (char == 'e') {
                     self.buf = null;
                     return map;
                 }
-                const k = try self.parseBytes(ally);
-                const v = try self.parseInner(ally);
-                try map.put(ally, k, v);
+                const k = try self.parseBytes();
+                const v = try self.parseInner();
+                try map.put(self.ally, k, v);
             }
             return ParseError.MissingTerminator;
         }
 
-        fn parseInner(self: *Self, ally: std.mem.Allocator) anyerror!Value {
+        fn parseInner(self: *Self) anyerror!Value {
             const char = try self.peek() orelse return error.EndOfStream;
 
             if (char >= '0' and char <= '9') {
                 return Value{
-                    .String = try self.parseBytes(ally),
+                    .String = try self.parseBytes(),
                 };
             }
 
             switch (try self.reader().readByte()) {
                 'i' => return .{
-                    .Integer = try self.parseInteger(ally),
+                    .Integer = try self.parseInteger(),
                 },
                 'l' => return .{
-                    .List = try self.parseList(ally),
+                    .List = try self.parseList(),
                 },
                 'd' => return .{
-                    .Dictionary = try self.parseDict(ally),
+                    .Dictionary = try self.parseDict(),
                 },
                 else => return ParseError.InvalidDelimiter,
             }
