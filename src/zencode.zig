@@ -9,7 +9,9 @@ const ParseError = error{
     InvalidDelimiter,
     InvalidInteger,
     InvalidString,
+    InvalidStringLength,
     InvalidIntegerCast,
+    InvalidEOS,
 };
 
 pub fn parse(b: []const u8, ally: std.mem.Allocator) !ValueTree {
@@ -29,9 +31,7 @@ pub const ValueTree = struct {
     arena: std.heap.ArenaAllocator,
     root: Value,
 
-    const Self = @This();
-
-    pub fn deinit(self: *const ValueTree) void {
+    pub fn deinit(self: @This()) void {
         self.arena.deinit();
     }
 };
@@ -127,8 +127,7 @@ pub const Value = union(enum) {
         if (int < 0) {
             return ParseError.InvalidIntegerCast;
         }
-        const uint: u64 = @intCast(int);
-        return uint;
+        return @as(u64, @intCast(int));
     }
 
     fn lookup(self: Self, key: []const u8, comptime tag: std.meta.FieldEnum(Value)) ?std.meta.FieldType(Value, tag) {
@@ -164,11 +163,9 @@ fn BencodeReader(comptime T: type) type {
 
         fn peek(self: *Self) !?u8 {
             if (self.buf == null) {
-                self.buf = self.child_reader.readByte() catch |err| {
-                    switch (err) {
-                        error.EndOfStream => return null,
-                        else => return err,
-                    }
+                self.buf = self.child_reader.readByte() catch |err| switch (err) {
+                    error.EndOfStream => return null,
+                    else => return err,
                 };
             }
             return self.buf;
@@ -180,8 +177,13 @@ fn BencodeReader(comptime T: type) type {
             };
             const len = try std.fmt.parseInt(usize, b, 10);
             var buf = try self.ally.alloc(u8, len);
-            var l = try self.reader().readAll(buf);
-            if (l == 0) return ParseError.InvalidString;
+            if (try self.reader().readAll(buf) == 0) {
+                return ParseError.InvalidString;
+            }
+            if (try self.peek()) |c| switch (c) {
+                'i', 'l', 'd', 'e', '0'...'9' => {},
+                else => return ParseError.InvalidStringLength,
+            };
             return buf;
         }
 
@@ -210,8 +212,8 @@ fn BencodeReader(comptime T: type) type {
 
         fn parseDict(self: *Self) !Map {
             var map = Map{};
-            while (try self.peek()) |char| {
-                if (char == 'e') {
+            while (try self.peek()) |c| {
+                if (c == 'e') {
                     self.buf = null;
                     return map;
                 }
@@ -223,9 +225,9 @@ fn BencodeReader(comptime T: type) type {
         }
 
         fn parseInner(self: *Self) anyerror!Value {
-            const char = try self.peek() orelse return error.EndOfStream;
+            const c = try self.peek() orelse return ParseError.InvalidEOS;
 
-            if (char >= '0' and char <= '9') {
+            if (c >= '0' and c <= '9') {
                 return Value{
                     .String = try self.parseBytes(),
                 };
@@ -257,6 +259,7 @@ test "parse integer" {
     defer tree.deinit();
     try expectEqual(@as(i64, 20), tree.root.Integer);
 }
+
 test "parse negative integer" {
     const tree = try parse("i-50e", testing.allocator);
     defer tree.deinit();
@@ -271,15 +274,14 @@ test "parse negative integer to u64" {
 
 test "parse invalid integer" {
     try expectError(ParseError.InvalidInteger, parse("iBBe", testing.allocator));
+    try expectError(ParseError.InvalidInteger, parse("i2Xe", testing.allocator));
 }
 
-test "parse integer invalid/missing delimiter" {
-    // TODO: we should also test for missing delimiter, but need work.
+test "parse integer invalid delimiter" {
     try expectError(ParseError.InvalidDelimiter, parse("x20e", testing.allocator));
 }
 
-test "parse integer invalid/missing terminator" {
-    // TODO: we should also test for invalid terminator, but need work.
+test "parse integer missing terminator" {
     try expectError(ParseError.MissingTerminator, parse("i20", testing.allocator));
 }
 
@@ -290,10 +292,7 @@ test "parse string" {
 }
 
 test "parse string length mismatch" {
-    // TODO: I would like this to fail if the length and actual string doesn't match, but need work.
-    const tree = try parse("5:helloworld", testing.allocator);
-    defer tree.deinit();
-    try expectEqualStrings("hello", tree.root.String);
+    try expectError(ParseError.InvalidStringLength, parse("5:helloworld", testing.allocator));
 }
 
 test "parse invalid string" {
