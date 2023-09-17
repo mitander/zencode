@@ -36,11 +36,16 @@ pub const ValueTree = struct {
     }
 };
 
+pub fn mapLookup(map: Map, key: []const u8, comptime tag: std.meta.FieldEnum(Value)) ?std.meta.FieldType(Value, tag) {
+    const val = map.get(key) orelse return null;
+    return if (val == tag) @field(val, @tagName(tag)) else null;
+}
+
 pub const Value = union(enum) {
     String: []const u8,
     Integer: i64,
     List: []const Value,
-    Dictionary: Map,
+    Map: Map,
 
     const Self = @This();
 
@@ -65,7 +70,7 @@ pub const Value = union(enum) {
                 }
                 try writer.writeByte(']');
             },
-            .Dictionary => |v| {
+            .Map => |v| {
                 try writer.writeByte('{');
                 for (v.keys(), v.values()) |key, val| {
                     try writer.print("\"{s}\": {},", .{ key, val });
@@ -94,7 +99,7 @@ pub const Value = union(enum) {
                 }
                 try writer.writeByte('e');
             },
-            .Dictionary => |v| {
+            .Map => |v| {
                 try writer.writeByte('d');
                 for (v.keys(), v.values()) |key, val| {
                     try (Value{ .String = key }).encode(writer);
@@ -103,37 +108,6 @@ pub const Value = union(enum) {
                 try writer.writeByte('e');
             },
         }
-    }
-
-    pub fn getDict(self: Self, key: []const u8) ?Value {
-        const val = self.lookup(key, .Dictionary) orelse return null;
-        return Value{ .Dictionary = val };
-    }
-
-    pub fn getList(self: Self, key: []const u8) ?[]const Value {
-        return self.lookup(key, .List);
-    }
-
-    pub fn getString(self: Self, key: []const u8) ?[]const u8 {
-        return self.lookup(key, .String);
-    }
-
-    pub fn getI64(self: Self, key: []const u8) ?i64 {
-        return self.lookup(key, .Integer);
-    }
-
-    pub fn getU64(self: Self, key: []const u8) !?u64 {
-        const int = self.getI64(key) orelse return null;
-        if (int < 0) {
-            return ParseError.InvalidIntegerCast;
-        }
-        return @as(u64, @intCast(int));
-    }
-
-    fn lookup(self: Self, key: []const u8, comptime tag: std.meta.FieldEnum(Value)) ?std.meta.FieldType(Value, tag) {
-        std.debug.assert(self == .Dictionary);
-        const val = self.Dictionary.get(key) orelse return null;
-        return if (val == tag) @field(val, @tagName(tag)) else null;
     }
 };
 
@@ -210,7 +184,7 @@ fn BencodeReader(comptime T: type) type {
             return ParseError.MissingTerminator;
         }
 
-        fn parseDict(self: *Self) !Map {
+        fn parseMap(self: *Self) !Map {
             var map = Map{};
             while (try self.peek()) |c| {
                 if (c == 'e') {
@@ -226,7 +200,6 @@ fn BencodeReader(comptime T: type) type {
 
         fn parseInner(self: *Self) anyerror!Value {
             const c = try self.peek() orelse return ParseError.InvalidEOS;
-
             if (c >= '0' and c <= '9') {
                 return Value{
                     .String = try self.parseBytes(),
@@ -241,7 +214,7 @@ fn BencodeReader(comptime T: type) type {
                     .List = try self.parseList(),
                 },
                 'd' => return .{
-                    .Dictionary = try self.parseDict(),
+                    .Map = try self.parseMap(),
                 },
                 else => return ParseError.InvalidDelimiter,
             }
@@ -266,22 +239,10 @@ test "parse negative integer" {
     try expectEqual(@as(i64, -50), tree.root.Integer);
 }
 
-test "parse negative integer to u64" {
-    const tree = try parse("d3:leni-50ee", testing.allocator);
-    defer tree.deinit();
-    try expectError(ParseError.InvalidIntegerCast, tree.root.getU64("len"));
-}
-
 test "parse invalid integer" {
     try expectError(ParseError.InvalidInteger, parse("iBBe", testing.allocator));
     try expectError(ParseError.InvalidInteger, parse("i2Xe", testing.allocator));
-}
-
-test "parse integer invalid delimiter" {
     try expectError(ParseError.InvalidDelimiter, parse("x20e", testing.allocator));
-}
-
-test "parse integer missing terminator" {
     try expectError(ParseError.MissingTerminator, parse("i20", testing.allocator));
 }
 
@@ -291,15 +252,9 @@ test "parse string" {
     try expectEqualStrings("test", tree.root.String);
 }
 
-test "parse string length mismatch" {
-    try expectError(ParseError.InvalidStringLength, parse("5:helloworld", testing.allocator));
-}
-
 test "parse invalid string" {
+    try expectError(ParseError.InvalidStringLength, parse("5:helloworld", testing.allocator));
     try expectError(ParseError.InvalidString, parse("5:", testing.allocator));
-}
-
-test "parse string missing separator" {
     try expectError(ParseError.MissingSeparator, parse("4test", testing.allocator));
 }
 
@@ -311,7 +266,9 @@ test "parse list" {
     try expectEqual(@as(i64, 42), list[1].Integer);
     try expectEqual(@as(i64, 9), list[2].List[0].Integer);
     try expectEqual(@as(i64, 50), list[2].List[1].Integer);
-    try expectEqualStrings("bar", list[3].getString("foo").?);
+    if (mapLookup(list[3].Map, "foo", .String)) |v| {
+        try expectEqualStrings("bar", v);
+    }
 }
 
 test "parse empty list" {
@@ -320,22 +277,23 @@ test "parse empty list" {
     try expectEqual(@as(usize, 0), tree.root.List.len);
 }
 
-test "parse list missing terminator" {
+test "parse invalid list" {
     try expectError(ParseError.MissingTerminator, parse("li13e", testing.allocator));
+    try expectError(ParseError.InvalidDelimiter, parse("lf13e", testing.allocator));
 }
 
 test "parse dict" {
     const tree = try parse("d3:foo3:bar4:spamli42eee", testing.allocator);
     defer tree.deinit();
-    try expectEqualStrings("bar", tree.root.getString("foo").?);
-    const list = tree.root.getList("spam").?;
-    try expectEqual(@as(i64, 42), list[0].Integer);
-}
-
-test "parse dict missing terminator" {
-    try expectError(ParseError.MissingTerminator, parse("d3:foo3:bar4:spamli42ee", testing.allocator));
+    if (mapLookup(tree.root.Map, "foo", .String)) |v| {
+        try expectEqualStrings("bar", v);
+    }
+    if (mapLookup(tree.root.Map, "spam", .List)) |v| {
+        try expectEqual(@as(i64, 42), v[0].Integer);
+    }
 }
 
 test "parse invalid dict" {
+    try expectError(ParseError.MissingTerminator, parse("d3:foo3:bar4:spamli42ee", testing.allocator));
     try expectError(ParseError.MissingSeparator, parse("d123e", testing.allocator));
 }

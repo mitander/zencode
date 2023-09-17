@@ -6,22 +6,24 @@ pub fn main() !void {
     const ally = gpa.allocator();
     defer _ = gpa.deinit();
 
-    // expected bencode
-    const expect = "l4:spami42eli9ei50eed3:foo3:baree";
+    // bencode
+    const bencode = "l4:spami42eli9ei50eed3:foo3:baree";
+    std.debug.print("Input: {s}\n", .{bencode});
 
     // parse bencode to ValueTree
-    const t = try zencode.parse(expect, ally);
+    const t = try zencode.parse(bencode, ally);
     defer t.deinit();
 
-    var buf = try ally.alloc(u8, expect.len);
+    var buf = try ally.alloc(u8, bencode.len);
     defer ally.free(buf);
     var w = std.io.fixedBufferStream(buf);
 
     // encode ValueTree
     try t.root.encode(w.writer());
 
-    // buffer content is expected bencode
-    std.debug.assert(std.mem.eql(u8, buf, expect));
-    std.debug.print("ValueTree: \n{s}\n\n", .{t.root});
-    std.debug.print("Encoded: \n{s}\n", .{buf});
+    // verify result is equal to original bencode
+    std.debug.assert(std.mem.eql(u8, buf, bencode));
+
+    std.debug.print("ValueTree: {s}\n", .{t.root});
+    std.debug.print("Output: {s}\n", .{buf});
 }
