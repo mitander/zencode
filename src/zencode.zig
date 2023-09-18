@@ -55,7 +55,7 @@ pub const ValueTree = struct {
 pub const Value = union(enum) {
     String: []const u8,
     Integer: i64,
-    List: []const Value,
+    List: ArrayList,
     Map: Map,
 
     const Self = @This();
@@ -75,7 +75,7 @@ pub const Value = union(enum) {
             },
             .List => |v| {
                 try writer.writeByte('[');
-                for (v) |item| {
+                for (v.items) |item| {
                     try writer.print("{}", .{item});
                     try writer.writeByte(',');
                 }
@@ -105,7 +105,7 @@ pub const Value = union(enum) {
             },
             .List => |v| {
                 try writer.writeByte('l');
-                for (v) |item| {
+                for (v.items) |item| {
                     try item.encode(writer);
                 }
                 try writer.writeByte('e');
@@ -182,12 +182,12 @@ fn BencodeReader(comptime T: type) type {
             return int;
         }
 
-        fn parseList(self: *Self) ![]Value {
+        fn parseList(self: *Self) !ArrayList {
             var arr = ArrayList.init(self.ally);
             while (try self.peek()) |c| {
                 if (c == 'e') {
                     self.buf = null;
-                    return arr.toOwnedSlice();
+                    return arr;
                 }
                 const v = try self.parseInner();
                 try arr.append(v);
@@ -273,18 +273,18 @@ test "parse list" {
     const tree = try parse("l4:spami42eli9ei50eed3:foo3:baree", testing.allocator);
     defer tree.deinit();
     const list = tree.root.List;
-    try expectEqualStrings("spam", list[0].String);
-    try expectEqual(@as(i64, 42), list[1].Integer);
-    try expectEqual(@as(i64, 9), list[2].List[0].Integer);
-    try expectEqual(@as(i64, 50), list[2].List[1].Integer);
-    const str = try mapLookup(list[3].Map, "foo", .String);
+    try expectEqualStrings("spam", list.items[0].String);
+    try expectEqual(@as(i64, 42), list.items[1].Integer);
+    try expectEqual(@as(i64, 9), list.items[2].List.items[0].Integer);
+    try expectEqual(@as(i64, 50), list.items[2].List.items[1].Integer);
+    const str = try mapLookup(list.items[3].Map, "foo", .String);
     try expectEqualStrings("bar", str);
 }
 
 test "parse empty list" {
     const tree = try parse("le", testing.allocator);
     defer tree.deinit();
-    try expectEqual(@as(usize, 0), tree.root.List.len);
+    try expectEqual(@as(usize, 0), tree.root.List.items.len);
 }
 
 test "parse invalid list" {
@@ -298,7 +298,7 @@ test "parse dict" {
     const str = try mapLookup(tree.root.Map, "foo", .String);
     try expectEqualStrings("bar", str);
     const list = try mapLookup(tree.root.Map, "spam", .List);
-    try expectEqual(@as(i64, 42), list[0].Integer);
+    try expectEqual(@as(i64, 42), list.items[0].Integer);
 }
 
 test "parse invalid dict" {
