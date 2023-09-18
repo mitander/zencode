@@ -27,6 +27,22 @@ pub fn parseReader(reader: anytype, ally: std.mem.Allocator) !ValueTree {
     return ValueTree{ .arena = arena, .root = values };
 }
 
+var MapLookupError: ?anyerror = null;
+
+pub fn setMapLookupError(err: anyerror) void {
+    MapLookupError = err;
+}
+
+pub fn mapLookup(map: Map, key: []const u8, comptime tag: std.meta.FieldEnum(Value)) ?std.meta.FieldType(Value, tag) {
+    const val = map.get(key) orelse return null;
+    return if (val == tag) @field(val, @tagName(tag)) else null;
+}
+
+pub fn mapLookupError(map: Map, key: []const u8, comptime tag: std.meta.FieldEnum(Value)) !std.meta.FieldType(Value, tag) {
+    const val = map.get(key) orelse return if (MapLookupError) |err| err else error.MapKeyNotFound;
+    return if (val == tag) @field(val, @tagName(tag)) else error.InvalidMapTag;
+}
+
 pub const ValueTree = struct {
     arena: std.heap.ArenaAllocator,
     root: Value,
@@ -35,11 +51,6 @@ pub const ValueTree = struct {
         self.arena.deinit();
     }
 };
-
-pub fn mapLookup(map: Map, key: []const u8, comptime tag: std.meta.FieldEnum(Value)) ?std.meta.FieldType(Value, tag) {
-    const val = map.get(key) orelse return null;
-    return if (val == tag) @field(val, @tagName(tag)) else null;
-}
 
 pub const Value = union(enum) {
     String: []const u8,
@@ -296,4 +307,11 @@ test "parse dict" {
 test "parse invalid dict" {
     try expectError(ParseError.MissingTerminator, parse("d3:foo3:bar4:spamli42ee", testing.allocator));
     try expectError(ParseError.MissingSeparator, parse("d123e", testing.allocator));
+}
+
+test "custom map error" {
+    const tree = try parse("d3:foo3:bar4:spamli42eee", testing.allocator);
+    defer tree.deinit();
+    setMapLookupError(error.MyCustomError);
+    try expectError(error.MyCustomError, mapLookupError(tree.root.Map, "xx", .String));
 }
