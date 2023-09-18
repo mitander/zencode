@@ -1,9 +1,9 @@
 const std = @import("std");
 
-const Map = std.StringArrayHashMapUnmanaged(Value);
-const ArrayList = std.ArrayList(Value);
+pub const Map = std.StringArrayHashMapUnmanaged(Value);
+pub const ArrayList = std.ArrayList(Value);
 
-const ParseError = error{
+pub const ParseError = error{
     MissingTerminator,
     MissingSeparator,
     InvalidDelimiter,
@@ -12,6 +12,8 @@ const ParseError = error{
     InvalidStringLength,
     InvalidIntegerCast,
     InvalidEOS,
+    InvalidMapTag,
+    MapKeyNotFound,
 };
 
 pub fn parse(b: []const u8, ally: std.mem.Allocator) !ValueTree {
@@ -27,20 +29,18 @@ pub fn parseReader(reader: anytype, ally: std.mem.Allocator) !ValueTree {
     return ValueTree{ .arena = arena, .root = values };
 }
 
-var MapLookupError: ?anyerror = null;
+pub var MapLookupError: ?anyerror = null;
 
-pub fn setMapLookupError(err: anyerror) void {
-    MapLookupError = err;
+pub fn mapLookup(map: Map, key: []const u8, comptime tag: std.meta.FieldEnum(Value)) !std.meta.FieldType(Value, tag) {
+    const val = map.get(key) orelse {
+        return if (MapLookupError) |err| err else ParseError.MapKeyNotFound;
+    };
+    return if (val == tag) @field(val, @tagName(tag)) else ParseError.InvalidMapTag;
 }
 
-pub fn mapLookup(map: Map, key: []const u8, comptime tag: std.meta.FieldEnum(Value)) ?std.meta.FieldType(Value, tag) {
+pub fn mapLookupOptional(map: Map, key: []const u8, comptime tag: std.meta.FieldEnum(Value)) ?std.meta.FieldType(Value, tag) {
     const val = map.get(key) orelse return null;
     return if (val == tag) @field(val, @tagName(tag)) else null;
-}
-
-pub fn mapLookupError(map: Map, key: []const u8, comptime tag: std.meta.FieldEnum(Value)) !std.meta.FieldType(Value, tag) {
-    const val = map.get(key) orelse return if (MapLookupError) |err| err else error.MapKeyNotFound;
-    return if (val == tag) @field(val, @tagName(tag)) else error.InvalidMapTag;
 }
 
 pub const ValueTree = struct {
@@ -277,9 +277,8 @@ test "parse list" {
     try expectEqual(@as(i64, 42), list[1].Integer);
     try expectEqual(@as(i64, 9), list[2].List[0].Integer);
     try expectEqual(@as(i64, 50), list[2].List[1].Integer);
-    if (mapLookup(list[3].Map, "foo", .String)) |v| {
-        try expectEqualStrings("bar", v);
-    }
+    const str = try mapLookup(list[3].Map, "foo", .String);
+    try expectEqualStrings("bar", str);
 }
 
 test "parse empty list" {
@@ -296,12 +295,10 @@ test "parse invalid list" {
 test "parse dict" {
     const tree = try parse("d3:foo3:bar4:spamli42eee", testing.allocator);
     defer tree.deinit();
-    if (mapLookup(tree.root.Map, "foo", .String)) |v| {
-        try expectEqualStrings("bar", v);
-    }
-    if (mapLookup(tree.root.Map, "spam", .List)) |v| {
-        try expectEqual(@as(i64, 42), v[0].Integer);
-    }
+    const str = try mapLookup(tree.root.Map, "foo", .String);
+    try expectEqualStrings("bar", str);
+    const list = try mapLookup(tree.root.Map, "spam", .List);
+    try expectEqual(@as(i64, 42), list[0].Integer);
 }
 
 test "parse invalid dict" {
@@ -309,9 +306,23 @@ test "parse invalid dict" {
     try expectError(ParseError.MissingSeparator, parse("d123e", testing.allocator));
 }
 
+test "dict key not found" {
+    const tree = try parse("d3:foo3:bar4:spamli42eee", testing.allocator);
+    defer tree.deinit();
+    const err = mapLookup(tree.root.Map, "not-found", .String);
+    try expectError(ParseError.MapKeyNotFound, err);
+}
+
+test "dict invalid tag" {
+    const tree = try parse("d3:foo3:bar4:spamli42eee", testing.allocator);
+    defer tree.deinit();
+    const err = mapLookup(tree.root.Map, "foo", .Map); // <- "foo" is not a map
+    try expectError(ParseError.InvalidMapTag, err);
+}
+
 test "custom map error" {
     const tree = try parse("d3:foo3:bar4:spamli42eee", testing.allocator);
     defer tree.deinit();
-    setMapLookupError(error.MyCustomError);
-    try expectError(error.MyCustomError, mapLookupError(tree.root.Map, "xx", .String));
+    MapLookupError = error.MyCustomError;
+    try expectError(error.MyCustomError, mapLookup(tree.root.Map, "xx", .String));
 }

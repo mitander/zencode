@@ -13,22 +13,34 @@ pub fn main() !void {
     const v = try zencode.parseReader(file.reader(), ally);
     defer v.deinit();
 
-    // access map values using zencode.mapLookup(map, key, type)
-    // types: [String, Integer, List, Map]
-    if (zencode.mapLookup(v.root.Map, "announce", .String)) |announce| {
-        std.debug.assert(std.mem.eql(u8, announce, "http://bttracker.debian.org:6969/announce"));
-        std.debug.print("announce: {s}\n", .{announce});
+    // access map values using zencode.mapLookupOptional(map, key, type)
+    // Types: [String, Integer, List, Map]
+    // Returns: error if key was not found
+    const announce = try zencode.mapLookup(v.root.Map, "announce", .String);
+    std.debug.assert(std.mem.eql(u8, announce, "http://bttracker.debian.org:6969/announce"));
+    std.debug.print("announce: {s}\n", .{announce});
+
+    // mapLookupOptional returns a optional value instead of error
+    if (zencode.mapLookupOptional(v.root.Map, "info", .Map)) |info| {
+        const name = zencode.mapLookupOptional(info, "name", .String).?;
+        std.debug.assert(std.mem.eql(u8, name, "debian-mac-12.1.0-amd64-netinst.iso"));
+        std.debug.print("name: {s}\n", .{name});
     }
 
-    if (zencode.mapLookup(v.root.Map, "creation date", .Integer)) |creation_date| {
-        std.debug.assert(creation_date == 1690028921);
-        std.debug.print("creation_date: {d}\n", .{creation_date});
-    }
+    // try to access map value with invalid tag type
+    const invalid_tag = zencode.mapLookup(v.root.Map, "info", .Integer);
+    const invalid_tag_optional = zencode.mapLookupOptional(v.root.Map, "info", .Integer);
+    std.debug.assert(invalid_tag == zencode.ParseError.InvalidMapTag);
+    std.debug.assert(invalid_tag_optional == null);
 
-    if (zencode.mapLookup(v.root.Map, "info", .Map)) |info| {
-        if (zencode.mapLookup(info, "name", .String)) |name| {
-            std.debug.assert(std.mem.eql(u8, name, "debian-mac-12.1.0-amd64-netinst.iso"));
-            std.debug.print("info.name: {s}\n", .{name});
-        }
-    }
+    // try to access non-existing map value
+    const not_found = zencode.mapLookup(v.root.Map, "not-found", .String);
+    const not_found_optional = zencode.mapLookupOptional(v.root.Map, "not-found", .String);
+    std.debug.assert(not_found == zencode.ParseError.MapKeyNotFound);
+    std.debug.assert(not_found_optional == null);
+
+    // you can add a custom error to be returned if a map key is not found
+    zencode.MapLookupError = error.MyCustomError;
+    const custom_not_found = zencode.mapLookup(v.root.Map, "not-found", .Integer);
+    std.debug.assert(custom_not_found == error.MyCustomError);
 }
