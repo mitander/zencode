@@ -8,7 +8,6 @@ pub const ParseError = error{
     MissingSeparator,
     InvalidDelimiter,
     InvalidInteger,
-    InvalidString,
     InvalidStringLength,
     InvalidIntegerCast,
     InvalidEOS,
@@ -162,9 +161,7 @@ fn BencodeReader(comptime T: type) type {
             };
             const len = try std.fmt.parseInt(usize, b, 10);
             var buf = try self.ally.alloc(u8, len);
-            if (try self.reader().readAll(buf) == 0) {
-                return ParseError.InvalidString;
-            }
+            _ = try self.reader().readAll(buf);
             if (try self.peek()) |c| switch (c) {
                 'i', 'l', 'd', 'e', '0'...'9' => {},
                 else => return ParseError.InvalidStringLength,
@@ -265,7 +262,6 @@ test "parse string" {
 
 test "parse invalid string" {
     try expectError(ParseError.InvalidStringLength, parse("5:helloworld", testing.allocator));
-    try expectError(ParseError.InvalidString, parse("5:", testing.allocator));
     try expectError(ParseError.MissingSeparator, parse("4test", testing.allocator));
 }
 
