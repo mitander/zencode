@@ -6,7 +6,7 @@ pub fn main() !void {
     const ally = gpa.allocator();
     defer _ = gpa.deinit();
 
-    var file = try std.fs.cwd().openFile("./assets/example.torrent", .{});
+    var file = try std.fs.cwd().openFile("./assets/debian-mac-12.1.0-amd64-netinst.iso.torrent", .{});
     defer file.close();
 
     // parse bencode to value tree
