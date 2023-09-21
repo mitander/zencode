@@ -38,8 +38,8 @@ pub fn mapLookup(map: Map, key: []const u8, comptime tag: std.meta.FieldEnum(Val
 }
 
 pub fn mapLookupOptional(map: Map, key: []const u8, comptime tag: std.meta.FieldEnum(Value)) ?std.meta.FieldType(Value, tag) {
-    const val = map.get(key) orelse return null;
-    return if (val == tag) @field(val, @tagName(tag)) else null;
+    const value = mapLookup(map, key, tag) catch null;
+    return value;
 }
 
 pub const ValueTree = struct {
