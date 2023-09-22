@@ -1,15 +1,62 @@
 # Zencode
 ![loc](https://sloc.xyz/github/mitander/zencode)
 
-[Bencode](https://en.wikipedia.org/wiki/Bencode) encoder/decoder library written in Zig
-
+[Bencode](https://en.wikipedia.org/wiki/Bencode) encoder/decoder library written in __Zig v0.11__ \
 Visit [BEP-0003](https://www.bittorrent.org/beps/bep_0003.html#bencoding) for more information about Bencode format
-
-## Zig version
-__v0.11__
 
 ## Note
 This project is work in progress, use at own discretion
+
+## Install dependency
+
+### using zon file
+
+`build.zig.zon`
+```zig
+// tagged release
+.{
+    .dependencies = .{
+        .zencode = .{
+            .url = "https://github.com/mitander/zencode/archive/c128c3044711213158959b588507ef68a3dfcacc.tar.gz",
+            .hash = "1220a3858c0cd65b61784414df4ee9c71a4e242eccbf9595b2f8f907223f0aeaffda",
+        },
+    },
+}
+
+// commit hash
+.{
+    .dependencies = .{
+        .zencode = .{
+            .url = "https://github.com/mitander/zencode/archive/<COMMIT_HASH>.tar.gz",
+            .hash = "<COMMIT_SHA2_CHECKSUM",
+        },
+    },
+}
+```
+
+`build.zig`
+```zig
+const zencode = b.dependency("zigcoro", .{}).module("zencode");
+my_exe.addModule("zencode", zencode);
+```
+
+### using git submodule
+
+`shell`
+```shell
+git submodule add https://github.com/mitander/zencode deps/zencode
+```
+`build.zig`
+```zig
+const zencode = b.addModule("zencode", .{
+    .source_file = std.Build.FileSource.relative("deps/zencode/src/zencode.zig"),
+});
+my_exe.addModule("zencode", zencode);
+```
+
+
+
+
 
 ## Usage
 ```zig
