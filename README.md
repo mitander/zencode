@@ -1,47 +1,29 @@
 # Zencode
 ![loc](https://sloc.xyz/github/mitander/zencode)
 
-[Bencode](https://en.wikipedia.org/wiki/Bencode) encoder/decoder library written in __Zig v0.11__ \
+[Bencode](https://en.wikipedia.org/wiki/Bencode) encoder/decoder library written in __Zig v0.13__ \
 Visit [BEP-0003](https://www.bittorrent.org/beps/bep_0003.html#bencoding) for more information about Bencode format
 
 ## Note
 This project is work in progress, use at own discretion
 
-## Install dependency
+## Install
 
-### Using zon file
+```sh
+# latest release
+zig fetch https://github.com/mitander/zencode/archive/v0.2.0.tar.gz --save
 
-`build.zig.zon`
-```zig
-.{
-    .dependencies = .{
-        .zencode = .{
-            .url = "https://github.com/mitander/zencode/archive/v0.1.0.tar.gz",
-            .hash = "1220a3858c0cd65b61784414df4ee9c71a4e242eccbf9595b2f8f907223f0aeaffda",
-        },
-    },
-}
+# master branch
+zig fetch https://github.com/mitander/zencode/archive/master.tar.gz --save
+
+# specific commit
+zig fetch https://github.com/mitander/zencode/archive/<COMMIT>.tar.gz --save
 ```
 
-`build.zig`
+`build.zig`:
 ```zig
 const zencode = b.dependency("zencode", .{}).module("zencode");
-my_exe.addModule("zencode", zencode);
-```
-
-### Using git submodule
-
-`shell`
-```shell
-$ cd <project-root>
-$ git submodule add https://github.com/mitander/zencode deps/zencode
-```
-`build.zig`
-```zig
-const zencode = b.addModule("zencode", .{
-    .source_file = std.Build.FileSource.relative("deps/zencode/src/zencode.zig"),
-});
-exe.addModule("zencode", zencode);
+exe.root_module.addModule("zencode", zencode);
 ```
 
 ## Usage
@@ -54,8 +36,7 @@ pub fn main() !void {
     const ally = gpa.allocator();
     defer _ = gpa.deinit();
 
-    const path = "./assets/debian-mac-12.1.0-amd64-netinst.iso.torrent";
-    var file = try std.fs.cwd().openFile(path, .{});
+    var file = try std.fs.cwd().openFile("./assets/debian-mac-12.1.0-amd64-netinst.iso.torrent", .{});
     defer file.close();
 
     // parse bencode to value tree
@@ -96,11 +77,13 @@ pub fn main() !void {
 ```
 
 ### Run examples
-#### Decode
-`zig build example_decode` or `zig build && ./zig-out/bin/example_decode`
+```sh
+# decode
+zig build example_decode
 
-#### Encode:
-`zig build example_encode` or `zig build && ./zig-out/bin/example_encode`
+# encode
+zig build example_encode
+```
 
 ## License
 [MIT](/LICENSE)
