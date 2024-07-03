@@ -24,7 +24,7 @@ pub fn parseReader(reader: anytype, ally: std.mem.Allocator) !ValueTree {
     var arena = std.heap.ArenaAllocator.init(ally);
     errdefer arena.deinit();
     var r: BencodeReader(@TypeOf(reader)) = .{ .child_reader = reader, .ally = arena.allocator() };
-    var values = try r.parseInner();
+    const values = try r.parseInner();
     return ValueTree{ .arena = arena, .root = values };
 }
 
@@ -160,7 +160,7 @@ fn BencodeReader(comptime T: type) type {
                 return ParseError.MissingSeparator;
             };
             const len = try std.fmt.parseInt(usize, b, 10);
-            var buf = try self.ally.alloc(u8, len);
+            const buf = try self.ally.alloc(u8, len);
             _ = try self.reader().readAll(buf);
             if (try self.peek()) |c| switch (c) {
                 'i', 'l', 'd', 'e', '0'...'9' => {},

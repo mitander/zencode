@@ -5,7 +5,7 @@ pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
     var arena = std.heap.ArenaAllocator.init(gpa.allocator());
-    var ally = arena.allocator();
+    const ally = arena.allocator();
     defer arena.deinit();
 
     // create data structure
